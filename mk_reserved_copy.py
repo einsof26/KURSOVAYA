@@ -3,44 +3,69 @@ import os
 from pprint import pprint
 import time
 from tqdm import tqdm
+from configparser import ConfigParser
+
+
+# token_yd = 'AQAAAABi21uyAADLW7Io3Yx3HEvOk7JA7QV9OQg'
 
 
 def get_photos(user_id, count):
+    """"Возвращает список фотографий с именем, размером и ссылкой на файл. Является основой для других функций """
     url = 'https://api.vk.com/method/photos.get'
-    TOKEN = 'vk1.a.Mzw6RcIoNu_9PzREpj6DhhwDaYwlAei2CutnqE2sh3AbbEElUg2nJ9XUE-TwzLo4lJoIfp82DbEGj2idwyfhEEpUBXsk2BPmVuf8fklMZqjgdpIT-_8mDTu7WFpVlFZWjbdVZghSZpbM6-EoV4yBHX0JXK7RKsfYkeabSXLlXYaEmCkFez0dSgpEoQYAmH02'
-    params = {'owner_id': user_id, 'access_token': TOKEN, 'v': '5.131', 'count': count, 'album_id': 'profile', 'extended': '1'}
+    parser = ConfigParser()
+    parser.read('setting.ini')
+    token = parser.get('database_config', 'token_vk')
+    params = {'owner_id': user_id, 'access_token': token, 'v': '5.131', 'count': count, 'album_id': 'profile',
+              'extended': '1'}
     response = requests.get(url, params=params)
     res = response.json()
     dic_res = {}
-    L_output = []
-    L_likes = []
-    for item in tqdm(res['response']['items']): #Проходим в цикле по фото, включаем прогресс-бар
-        if item['likes']['count'] in L_likes:   #Проверяем совпадает ли количество лайков у фотографий
-            dic_res['filename'] = f"{item['likes']['count']}_{item['date']}.jpg "#Если да, то добавляем дату в название фото
+    l_output = []
+    l_likes = []
+    for item in res['response']['items']:  # Перебирает фотографии в цилке.
+        if item['likes']['count'] in l_likes:  # Проверяет совпадает ли количество лайков у фотографий
+            dic_res['filename'] = f"{item['likes']['count']}_{item['date']}.jpg "  # Если да, то добавляем дату в
+            # название фото
         else:
             dic_res['filename'] = f"{item['likes']['count']}.jpg "
-        L_likes.append(item['likes']['count'])
+            l_likes.append(item['likes']['count'])
         dic_sizes = {}
-        for foto in item['sizes']:#Находим требуемое соотношение ширины/высоты фотографиии
-            z = (foto['width'] / foto['height'])  # Здесь применина логика максимального соотношения - ширина/высота(как в ТЗ...)
-            # Возможно требуется - max(foto['width'],foto['height']) or max((foto['width'])+(foto['height']))
+        for foto in item['sizes']:  # Находит  соотношение ширины/высоты фотографий
+            z = (foto['width'] / foto['height'])  # Здесь применина логика максимального соотношения
+            # - ширина/высота(как в ТЗ...)
             dic_sizes[z] = foto['url']
-        max_size = max(dic_sizes.keys())#Находим максимальный размер, чтобы отправить эту фотографию на ЯД
+        max_size = max(dic_sizes.keys())  # Находит максимальный размер для отправки на ЯД
         prop_foto = dic_sizes[max_size]
-        filename = f"FOTOS/{dic_res['filename']}"
-        respons = requests.get(prop_foto)#Запрос на получение адреса фотографии
-        if respons.status_code == 200:
-            print(f'{dic_res["filename"]} saved in local')
-            with open(filename, 'wb') as imgfile:#Сохраняем на диске в проекте
-                imgfile.write(respons.content)
-        d_temp = {'size': round(max_size,3)}
-        dic_res.update(d_temp)
-        L_output+=dic_res.items()
-        time.sleep(1)
-    pprint(f"Список файлов - {L_output}")#Вывод списка файлов по требуемой форме
+        dic_res['size'] = round(max_size, 3)
+        dic_res['link'] = prop_foto
+        l_output.append(dic_res)  # Формирует словарь с имеенем фотографии, размера, ссылки. Этот словарь -
+        # база для других функций
+    return l_output
 
 
-def mk_yd_dir():#Создание специальной директории на ЯД для хранения резервных фото
+def show_info(user_id, count):
+    """"Возвращает информацию о сохраненных фотографиях в требуемом формате """
+    l_output = []
+    dic = {}
+    for elem in get_photos(user_id, count):
+        dic['filename'] = elem['filename']
+        dic['size'] = elem['size']
+        l_output.append(dic)
+    return l_output
+
+
+def get_links(user_id, count):
+    """"Возвращает словарь с ссылками на фотографии, как значения, и названиями как ключами"""
+    l_output = []
+    dic = {}
+    for elem in get_photos(user_id, count):
+        dic[elem['filename']] = elem['link']
+        l_output.append(dic)
+    return l_output
+
+
+def mk_yd_dir(token_yd):
+    """"Создает специальную директорию на ЯД для хранения резервных фото"""
     url = 'https://cloud-api.yandex.net/v1/disk/resources'
     path = 'ReservedFoto'
     headers = {
@@ -51,7 +76,8 @@ def mk_yd_dir():#Создание специальной директории н
         print(f'dir {path} created!')
 
 
-def _get_upload_link(filename):#Функция получает ссылку на загрузку на ЯД
+def get_upload_link(filename, token_yd):
+    """"Возвращает  ссылку на загрузку на ЯД по имени файла"""
     upload_url = "https://cloud-api.yandex.net/v1/disk/resources/upload"
     headers = {
         'Content-Type': 'application/json',
@@ -60,32 +86,57 @@ def _get_upload_link(filename):#Функция получает ссылку н�
     params = {"path": f'ReservedFoto/{filename}', "overwrite": "true"}
     response = requests.get(upload_url, headers=headers, params=params)
     if response.status_code == 200 or 201:
-        print(f"link for {filename} created")
-    return response.json()
+        pass
 
 
-def upload_file_to_disk():#Функция загружает фото с локального диска на ЯД по полученной ссылке
-    for filename in tqdm(os.listdir("FOTOS")):
-        with open(os.path.join("FOTOS", filename), 'rb') as f:
-            data = f.read()
-            href = _get_upload_link(filename).get("href", "")
-            response = requests.put(href, data=data)
-            response.raise_for_status()
-            if response.status_code == 201:
-                 print(f"file {filename} uploaded!")
-        time.sleep(1)
-    print("Finished!")
+def uploader(filename, link, token_yd):
+    """"Определяет механизм загрузки на ЯД"""
+    get_upload_link(filename, token_yd)
+    upload_url = "https://cloud-api.yandex.net/v1/disk/resources/upload"
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'OAuth {}'.format(token_yd)
+    }
+    params = {"path": f'ReservedFoto/{filename}', "url": link, "overwrite": "true"}
+    requests.post(upload_url, headers=headers, params=params)
+    print(f'File {filename} uploaded to YandexDisk!')
 
 
-token_yd = 'AQAAAAA87JNYAADLWz9Biym-aU5PoArcTu9Lt2g'
-user_id = 123456
+def upload_to_disk(user_id, count, token_yd):
+    """"Загружаеет непосредственно фотографии на ЯД"""
+    l_links = get_links(user_id, count)
+    for elem in tqdm(l_links):  # Перебирает ссылки на фотографии. Подключает прогресс-бар.
+        for filename, link in elem.items():
+            get_upload_link(filename, token_yd)
+            uploader(filename, link, token_yd)
+    time.sleep(0.5)
 
 
-def mk_reserved_copy(user_id,count, token=token_yd):#Результурующая функция для сохраниния резервных копий и вывода
-                                                    #информационного файла
-    get_photos(user_id, count)
-    mk_yd_dir()
-    upload_file_to_disk()
+def id_screen_name(id_screenname):
+    """"Возвращает id после пользовательского ввода id или screen_name """
+    url = 'https://api.vk.com/method/users.get'
+    parser = ConfigParser()
+    parser.read('setting.ini')
+    token = parser.get('database_config', 'token_vk')
+    params = {'user_ids': id_screenname, 'fields': 'screen_name','access_token': token, 'v': '5.131'}
+    response = requests.get(url, params=params)
+    res = response.json()
+    return res['response'][0]['id']
 
 
-mk_reserved_copy(user_id=user_id,token = token_yd,count=4)
+def mk_reserved_copy():
+    """"Результирующая функция, принимает пользовательский вввод user_id ,count, token"""
+    id_screenname = input("Введите целевой профиль ( id или screen_name):  ")
+    token_yd = input("Введите  token_yd:  ")
+    count = input("Введите  count - необходимое количество фотографий:  ")
+    if not count.isdigit():  # В случае не корректного ввода количества фотографий,
+        # устанавливается количество по умолчанию
+        count = 5
+    mk_yd_dir(token_yd)
+    id_screen_name(id_screenname)
+    upload_to_disk(id_screen_name(id_screenname), count, token_yd)
+    show_info(id_screen_name(id_screenname), count)
+
+
+if __name__ == "__main__":
+    mk_reserved_copy()
