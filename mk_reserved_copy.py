@@ -4,9 +4,7 @@ from pprint import pprint
 import time
 from tqdm import tqdm
 from configparser import ConfigParser
-
-
-# token_yd = 'AQAAAABi21uyAADLW7Io3Yx3HEvOk7JA7QV9OQg'
+import json
 
 
 def get_photos(user_id, count):
@@ -19,10 +17,10 @@ def get_photos(user_id, count):
               'extended': '1'}
     response = requests.get(url, params=params)
     res = response.json()
-    dic_res = {}
     l_output = []
     l_likes = []
     for item in res['response']['items']:  # Перебирает фотографии в цилке.
+        dic_res = {}
         if item['likes']['count'] in l_likes:  # Проверяет совпадает ли количество лайков у фотографий
             dic_res['filename'] = f"{item['likes']['count']}_{item['date']}.jpg "  # Если да, то добавляем дату в
             # название фото
@@ -44,14 +42,16 @@ def get_photos(user_id, count):
 
 
 def show_info(user_id, count):
-    """"Возвращает информацию о сохраненных фотографиях в требуемом формате """
+    """"Возвращает информацию о сохраненных фотографиях в требуемом формате, создание и запись в файл json """
     l_output = []
-    dic = {}
     for elem in get_photos(user_id, count):
+        dic = {}
         dic['filename'] = elem['filename']
         dic['size'] = elem['size']
         l_output.append(dic)
-    return l_output
+    with open('file_info_json.json','w') as file_json:
+        json.dump(l_output,file_json)
+    pprint( l_output)
 
 
 def get_links(user_id, count):
@@ -59,6 +59,7 @@ def get_links(user_id, count):
     l_output = []
     dic = {}
     for elem in get_photos(user_id, count):
+        dic = {}
         dic[elem['filename']] = elem['link']
         l_output.append(dic)
     return l_output
@@ -105,9 +106,17 @@ def uploader(filename, link, token_yd):
 def upload_to_disk(user_id, count, token_yd):
     """"Загружаеет непосредственно фотографии на ЯД"""
     l_links = get_links(user_id, count)
+    #pprint(l_links)
     for elem in tqdm(l_links):  # Перебирает ссылки на фотографии. Подключает прогресс-бар.
+        #T = list(elem.items())
+        #print(f"=========={T}" )
+
+
+        #get_upload_link(T[0], token_yd)
+        #uploader(T[0], T[1], token_yd)
         for filename, link in elem.items():
-            get_upload_link(filename, token_yd)
+            #print(filename,link)
+            #get_upload_link(filename, token_yd)
             uploader(filename, link, token_yd)
     time.sleep(0.5)
 
