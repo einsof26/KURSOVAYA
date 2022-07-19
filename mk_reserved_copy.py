@@ -1,5 +1,4 @@
 import requests
-import os
 from pprint import pprint
 import time
 from tqdm import tqdm
@@ -108,15 +107,7 @@ def upload_to_disk(user_id, count, token_yd):
     l_links = get_links(user_id, count)
     #pprint(l_links)
     for elem in tqdm(l_links):  # Перебирает ссылки на фотографии. Подключает прогресс-бар.
-        #T = list(elem.items())
-        #print(f"=========={T}" )
-
-
-        #get_upload_link(T[0], token_yd)
-        #uploader(T[0], T[1], token_yd)
         for filename, link in elem.items():
-            #print(filename,link)
-            #get_upload_link(filename, token_yd)
             uploader(filename, link, token_yd)
     time.sleep(0.5)
 
